@@ -2,7 +2,14 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Motion Video Player (Brightness Detection)</title>
+
+<!-- Full-screen iOS Web App -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="MotionFrame">
+
+<title>Motion Video Frame</title>
+
 <style>
   body { margin: 0; background: black; overflow: hidden; }
   video#player { width: 100vw; height: 100vh; object-fit: cover; }
@@ -14,7 +21,7 @@
     right: 0;
     width: 1px;
     height: 1px;
-    opacity: 0.01; /* must NOT be 0 */
+    opacity: 0.01;
     pointer-events: none;
   }
 
@@ -33,7 +40,7 @@
     transition: opacity 0.5s ease;
   }
 
-  /* Motion dot indicator */
+  /* Motion dot */
   #motionDot {
     position: fixed;
     top: 10px;
@@ -41,7 +48,7 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: grey; /* idle state */
+    background: grey;
     border: 2px solid #fff;
     z-index: 9999;
   }
@@ -66,12 +73,20 @@ const motionDot = document.getElementById('motionDot');
 
 let lastBrightness = null;
 let motionTimer = null;
+let sleepTimer = null;
+let originalBrightness = null;
+let sleeping = false;
 
-// Hide debug overlay after 5 seconds
-setTimeout(() => {
-  debug.style.opacity = "0";
-}, 5000);
+const THRESHOLD = 5;
+const SLEEP_DELAY = 10 * 60 * 1000; // 10 minutes
 
+// Hide debug after 5 seconds
+setTimeout(() => { debug.style.opacity = "0"; }, 5000);
+
+// Get original brightness (iOS doesn't expose this, so we simulate)
+originalBrightness = 1.0;
+
+// Start camera
 navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
   .then(stream => cam.srcObject = stream)
   .catch(err => alert("Camera access failed: " + err));
@@ -81,11 +96,38 @@ const ctx = canvas.getContext('2d');
 
 player.load();
 
-const THRESHOLD = 5;  // VERY sensitive for iPad
+function goToSleep() {
+  sleeping = true;
+  player.pause();
+  cam.srcObject.getTracks().forEach(t => t.stop());
+  motionDot.style.background = "grey";
+  document.body.style.opacity = "0.1"; // simulate dim screen
+}
+
+function wakeUp() {
+  if (!sleeping) return;
+  sleeping = false;
+
+  document.body.style.opacity = originalBrightness;
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+    .then(stream => cam.srcObject = stream);
+
+  lastBrightness = null;
+  detectMotion();
+
+  player.play(); // Option A: play immediately
+}
+
+function resetSleepTimer() {
+  clearTimeout(sleepTimer);
+  sleepTimer = setTimeout(goToSleep, SLEEP_DELAY);
+}
 
 function detectMotion() {
+  if (sleeping) return;
+
   if (cam.videoWidth === 0) {
-    debug.innerText = "Waiting for camera…";
     requestAnimationFrame(detectMotion);
     return;
   }
@@ -96,13 +138,9 @@ function detectMotion() {
   ctx.drawImage(cam, 0, 0);
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  // Compute average brightness
   let total = 0;
   for (let i = 0; i < frame.data.length; i += 4) {
-    const r = frame.data[i];
-    const g = frame.data[i+1];
-    const b = frame.data[i+2];
-    total += (r + g + b) / 3;
+    total += (frame.data[i] + frame.data[i+1] + frame.data[i+2]) / 3;
   }
   const brightness = total / (frame.data.length / 4);
 
@@ -110,20 +148,10 @@ function detectMotion() {
   if (lastBrightness !== null) {
     diff = Math.abs(brightness - lastBrightness);
 
-    debug.innerText =
-      "Brightness: " + brightness.toFixed(2) + "\n" +
-      "Diff: " + diff.toFixed(5) + "\n" +
-      "Threshold: " + THRESHOLD + "\n" +
-      (diff > THRESHOLD ? "MOTION DETECTED" : "no motion");
-
     if (diff > THRESHOLD) {
-      motionDot.style.background = "lime"; // green when motion
+      motionDot.style.background = "lime";
       player.play();
-      clearTimeout(motionTimer);
-      motionTimer = setTimeout(() => {
-        player.pause();
-        motionDot.style.background = "grey"; // back to grey
-      }, 3000);
+      resetSleepTimer();
     } else {
       motionDot.style.background = "grey";
     }
@@ -133,7 +161,11 @@ function detectMotion() {
   requestAnimationFrame(detectMotion);
 }
 
+resetSleepTimer();
 detectMotion();
+
+// Wake on any touch
+window.addEventListener("touchstart", wakeUp);
 </script>
 
 </body>
