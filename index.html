@@ -30,6 +30,7 @@
     font-size: 14px;
     border-radius: 6px;
     z-index: 9999;
+    transition: opacity 0.5s ease;
   }
 
   /* Motion dot indicator */
@@ -40,7 +41,7 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: red; /* default: no motion */
+    background: grey; /* idle state */
     border: 2px solid #fff;
     z-index: 9999;
   }
@@ -65,6 +66,11 @@ const motionDot = document.getElementById('motionDot');
 
 let lastBrightness = null;
 let motionTimer = null;
+
+// Hide debug overlay after 5 seconds
+setTimeout(() => {
+  debug.style.opacity = "0";
+}, 5000);
 
 navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
   .then(stream => cam.srcObject = stream)
@@ -111,15 +117,15 @@ function detectMotion() {
       (diff > THRESHOLD ? "MOTION DETECTED" : "no motion");
 
     if (diff > THRESHOLD) {
-      motionDot.style.background = "lime"; // turn green
+      motionDot.style.background = "lime"; // green when motion
       player.play();
       clearTimeout(motionTimer);
       motionTimer = setTimeout(() => {
         player.pause();
-        motionDot.style.background = "red"; // back to red
+        motionDot.style.background = "grey"; // back to grey
       }, 3000);
     } else {
-      motionDot.style.background = "red";
+      motionDot.style.background = "grey";
     }
   }
 
