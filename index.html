@@ -2,14 +2,30 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Motion Video Player</title>
+<title>Motion Video Player (Debug)</title>
 <style>
   body { margin: 0; background: black; overflow: hidden; }
   video#player { width: 100vw; height: 100vh; object-fit: cover; }
   #cam { display: none; }
+
+  /* Debug overlay */
+  #debug {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.6);
+    color: #0f0;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 14px;
+    border-radius: 6px;
+    z-index: 9999;
+  }
 </style>
 </head>
 <body>
+
+<div id="debug">Initializing…</div>
 
 <!-- Hidden camera feed -->
 <video id="cam" autoplay playsinline></video>
@@ -22,6 +38,7 @@
 <script>
 const cam = document.getElementById('cam');
 const player = document.getElementById('player');
+const debug = document.getElementById('debug');
 
 let lastFrame;
 let motionTimer = null;
@@ -35,11 +52,15 @@ navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
 
-// iOS autoplay fix: load video immediately
+// iOS autoplay fix
 player.load();
+
+// Adjustable sensitivity
+let THRESHOLD = 120000;  // MUCH lower than before
 
 function detectMotion() {
   if (cam.videoWidth === 0) {
+    debug.innerText = "Waiting for camera…";
     requestAnimationFrame(detectMotion);
     return;
   }
@@ -50,14 +71,20 @@ function detectMotion() {
   ctx.drawImage(cam, 0, 0);
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+  let diff = 0;
+
   if (lastFrame) {
-    let diff = 0;
     for (let i = 0; i < frame.data.length; i += 4) {
       diff += Math.abs(frame.data[i] - lastFrame.data[i]);
     }
 
-    // Motion threshold — tweak if needed
-    if (diff > 500000) {
+    // Debug output
+    debug.innerText = 
+      "Motion: " + diff + "\n" +
+      "Threshold: " + THRESHOLD + "\n" +
+      (diff > THRESHOLD ? "MOTION DETECTED" : "no motion");
+
+    if (diff > THRESHOLD) {
       player.play();
       clearTimeout(motionTimer);
       motionTimer = setTimeout(() => player.pause(), 3000);
