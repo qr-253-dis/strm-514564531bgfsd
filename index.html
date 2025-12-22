@@ -57,7 +57,7 @@ function detectMotion() {
     }
 
     // Motion threshold — tweak if needed
-    if (diff > 3000000) {
+    if (diff > 500000) {
       player.play();
       clearTimeout(motionTimer);
       motionTimer = setTimeout(() => player.pause(), 3000);
