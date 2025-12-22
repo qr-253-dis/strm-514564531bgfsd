@@ -90,7 +90,7 @@ function detectMotion() {
 
     debug.innerText =
       "Brightness: " + brightness.toFixed(2) + "\n" +
-      "Diff: " + diff.toFixed(2) + "\n" +
+      "Diff: " + diff.toFixed(5) + "\n" +
       "Threshold: " + THRESHOLD + "\n" +
       (diff > THRESHOLD ? "MOTION DETECTED" : "no motion");
 
