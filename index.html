@@ -15,7 +15,7 @@
 <video id="cam" autoplay playsinline></video>
 
 <!-- Your video -->
-<video id="player" playsinline preload="auto">
+<video id="player" playsinline preload="auto" muted>
   <source src="yourvideo.mp4" type="video/mp4">
 </video>
 
@@ -35,8 +35,14 @@ navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
 
+// iOS autoplay fix: load video immediately
+player.load();
+
 function detectMotion() {
-  if (cam.videoWidth === 0) return;
+  if (cam.videoWidth === 0) {
+    requestAnimationFrame(detectMotion);
+    return;
+  }
 
   canvas.width = cam.videoWidth;
   canvas.height = cam.videoHeight;
@@ -50,7 +56,7 @@ function detectMotion() {
       diff += Math.abs(frame.data[i] - lastFrame.data[i]);
     }
 
-    // Motion threshold — tweak this
+    // Motion threshold — tweak if needed
     if (diff > 2000000) {
       player.play();
       clearTimeout(motionTimer);
