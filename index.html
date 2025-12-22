@@ -6,18 +6,19 @@
 <style>
   body { margin: 0; background: black; overflow: hidden; }
   video#player { width: 100vw; height: 100vh; object-fit: cover; }
+
+  /* Camera must be visible (1px) for iOS to update frames */
   #cam {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  width: 1px;
-  height: 1px;
-  opacity: 0.01; /* must NOT be 0 */
-  pointer-events: none;
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0.01; /* must NOT be 0 */
+    pointer-events: none;
   }
 
-
-
+  /* Debug overlay */
   #debug {
     position: fixed;
     top: 10px;
@@ -30,11 +31,25 @@
     border-radius: 6px;
     z-index: 9999;
   }
+
+  /* Motion dot indicator */
+  #motionDot {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: red; /* default: no motion */
+    border: 2px solid #fff;
+    z-index: 9999;
+  }
 </style>
 </head>
 <body>
 
 <div id="debug">Initializing…</div>
+<div id="motionDot"></div>
 
 <video id="cam" autoplay playsinline></video>
 
@@ -46,6 +61,7 @@
 const cam = document.getElementById('cam');
 const player = document.getElementById('player');
 const debug = document.getElementById('debug');
+const motionDot = document.getElementById('motionDot');
 
 let lastBrightness = null;
 let motionTimer = null;
@@ -95,9 +111,15 @@ function detectMotion() {
       (diff > THRESHOLD ? "MOTION DETECTED" : "no motion");
 
     if (diff > THRESHOLD) {
+      motionDot.style.background = "lime"; // turn green
       player.play();
       clearTimeout(motionTimer);
-      motionTimer = setTimeout(() => player.pause(), 3000);
+      motionTimer = setTimeout(() => {
+        player.pause();
+        motionDot.style.background = "red"; // back to red
+      }, 3000);
+    } else {
+      motionDot.style.background = "red";
     }
   }
 
