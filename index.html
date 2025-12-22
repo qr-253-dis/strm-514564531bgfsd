@@ -2,13 +2,12 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Motion Video Player (Debug)</title>
+<title>Motion Video Player (Brightness Detection)</title>
 <style>
   body { margin: 0; background: black; overflow: hidden; }
   video#player { width: 100vw; height: 100vh; object-fit: cover; }
   #cam { display: none; }
 
-  /* Debug overlay */
   #debug {
     position: fixed;
     top: 10px;
@@ -27,10 +26,8 @@
 
 <div id="debug">Initializing…</div>
 
-<!-- Hidden camera feed -->
 <video id="cam" autoplay playsinline></video>
 
-<!-- Your video -->
 <video id="player" playsinline preload="auto" muted>
   <source src="yourvideo.mp4" type="video/mp4">
 </video>
@@ -40,23 +37,19 @@ const cam = document.getElementById('cam');
 const player = document.getElementById('player');
 const debug = document.getElementById('debug');
 
-let lastFrame;
+let lastBrightness = null;
 let motionTimer = null;
 
-// Ask for camera
 navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
   .then(stream => cam.srcObject = stream)
   .catch(err => alert("Camera access failed: " + err));
 
-// Create canvas for frame comparison
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
 
-// iOS autoplay fix
 player.load();
 
-// Adjustable sensitivity
-let THRESHOLD = 120000;  // MUCH lower than before
+const THRESHOLD = 5;  // VERY sensitive for iPad
 
 function detectMotion() {
   if (cam.videoWidth === 0) {
@@ -71,16 +64,23 @@ function detectMotion() {
   ctx.drawImage(cam, 0, 0);
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+  // Compute average brightness
+  let total = 0;
+  for (let i = 0; i < frame.data.length; i += 4) {
+    const r = frame.data[i];
+    const g = frame.data[i+1];
+    const b = frame.data[i+2];
+    total += (r + g + b) / 3;
+  }
+  const brightness = total / (frame.data.length / 4);
+
   let diff = 0;
+  if (lastBrightness !== null) {
+    diff = Math.abs(brightness - lastBrightness);
 
-  if (lastFrame) {
-    for (let i = 0; i < frame.data.length; i += 4) {
-      diff += Math.abs(frame.data[i] - lastFrame.data[i]);
-    }
-
-    // Debug output
-    debug.innerText = 
-      "Motion: " + diff + "\n" +
+    debug.innerText =
+      "Brightness: " + brightness.toFixed(2) + "\n" +
+      "Diff: " + diff.toFixed(2) + "\n" +
       "Threshold: " + THRESHOLD + "\n" +
       (diff > THRESHOLD ? "MOTION DETECTED" : "no motion");
 
@@ -91,7 +91,7 @@ function detectMotion() {
     }
   }
 
-  lastFrame = frame;
+  lastBrightness = brightness;
   requestAnimationFrame(detectMotion);
 }
 
