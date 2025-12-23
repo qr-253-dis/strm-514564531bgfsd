@@ -8,7 +8,6 @@ on:
 permissions:
   contents: write
 
-
 jobs:
   convert:
     runs-on: ubuntu-latest
@@ -20,23 +19,32 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Find newest uploaded video (any folder, any extension)
+      - name: Find newest uploaded video (excluding yourvideo.mp4)
         id: findvideo
         run: |
-          FILE=$(find . -type f \( -iname "*.mov" -o -iname "*.mp4" -o -iname "*.m4v" \) | sort -r | head -n 1)
+          FILE=$(find . -type f \
+            \( -iname "*.mov" -o -iname "*.mp4" -o -iname "*.m4v" \) \
+            ! -iname "yourvideo.mp4" \
+            | sort -r | head -n 1)
           echo "file=$FILE" >> $GITHUB_OUTPUT
           echo "Found file: $FILE"
 
       - name: Convert to MP4
         run: |
-          ffmpeg -y -i "${{ steps.findvideo.outputs.file }}" -vcodec libx264 -acodec aac yourvideo.mp4
+          ffmpeg -y -i "${{ steps.findvideo.outputs.file }}" \
+            -vcodec libx264 -acodec aac yourvideo.mp4
+
+      - name: Delete original uploaded video
+        run: |
+          rm -f "${{ steps.findvideo.outputs.file }}"
+          git add -A
+          git commit -m "Removed original uploaded video" || true
 
       - name: Commit converted file (force push)
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add yourvideo.mp4
-          git commit -m "Auto-converted video to MP4" || echo "No changes to commit"
+          git commit -m "Auto-converted video to MP4" || true
           git pull --rebase --strategy-option=theirs || true
           git push --force
-
