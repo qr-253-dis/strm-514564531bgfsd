@@ -11,8 +11,19 @@
 <title>Motion Video Frame</title>
 
 <style>
-  body { margin: 0; background: black; overflow: hidden; transition: opacity 0.5s ease; }
-  video#player { width: 100vw; height: 100vh; object-fit: cover; }
+  body {
+    margin: 0;
+    background: black;
+    overflow: hidden;
+    transition: opacity 0.5s ease;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+
+  video#player {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+  }
 
   /* Camera must be visible (1px) for iOS to update frames */
   #cam {
@@ -52,6 +63,85 @@
     border: 2px solid #fff;
     z-index: 9999;
   }
+
+  /* Hidden settings panel (right slide-in) */
+  #settingsPanel {
+    position: fixed;
+    top: 0;
+    right: -280px; /* hidden by default */
+    width: 260px;
+    height: 100vh;
+    background: rgba(0,0,0,0.8);
+    color: #fff;
+    padding: 16px;
+    box-sizing: border-box;
+    z-index: 10000;
+    border-radius: 16px 0 0 16px;
+    box-shadow: -4px 0 12px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: right 0.3s ease;
+  }
+
+  #settingsPanel.open {
+    right: 0;
+  }
+
+  #settingsPanel h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+  }
+
+  #settingsPanel h3 {
+    margin: 12px 0 4px;
+    font-size: 14px;
+    opacity: 0.9;
+  }
+
+  #settingsPanel label {
+    font-size: 13px;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  #settingsPanel input[type="range"] {
+    width: 100%;
+  }
+
+  #settingsPanel .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  #settingsPanel button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    background: #444;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  #settingsPanel button:active {
+    background: #666;
+  }
+
+  #settingsPanel .toggleRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+
+  #calibrationStatus {
+    font-size: 11px;
+    opacity: 0.8;
+  }
 </style>
 </head>
 <body>
@@ -64,22 +154,90 @@
 <video id="player" playsinline preload="auto" muted loop>
   <source src="yourvideo.mp4" type="video/mp4">
 </video>
+
+<!-- Hidden settings panel -->
+<div id="settingsPanel">
+  <h2>Settings</h2>
+
+  <h3>Motion sensitivity</h3>
+  <label>
+    Lower = more sensitive
+  </label>
+  <input id="motionThresholdSlider" type="range" min="2" max="20" value="5">
+  <div class="row">
+    <span>Sensitive</span>
+    <span id="motionThresholdValue">5</span>
+  </div>
+
+  <h3>Idle pause duration</h3>
+  <label>
+    Seconds before video auto‑pauses
+  </label>
+  <input id="idlePauseSlider" type="range" min="3" max="15" value="7">
+  <div class="row">
+    <span>3s</span>
+    <span id="idlePauseValue">7s</span>
+  </div>
+
+  <h3>Sleep timer</h3>
+  <label>
+    Minutes with no motion before dim
+  </label>
+  <input id="sleepTimerSlider" type="range" min="1" max="30" value="10">
+  <div class="row">
+    <span>1 min</span>
+    <span id="sleepTimerValue">10 min</span>
+  </div>
+
+  <h3>Display</h3>
+  <div class="toggleRow">
+    <span>Show debug overlay</span>
+    <input id="debugToggle" type="checkbox" checked>
+  </div>
+  <div class="toggleRow">
+    <span>Show motion dot</span>
+    <input id="motionDotToggle" type="checkbox" checked>
+  </div>
+
+  <h3>Calibration</h3>
+  <button id="calibrateButton">Run calibration</button>
+  <div id="calibrationStatus">Not calibrated yet</div>
+
+  <button id="resetDefaultsButton">Reset to defaults</button>
+</div>
 <script>
 const cam = document.getElementById('cam');
 const player = document.getElementById('player');
 const debug = document.getElementById('debug');
 const motionDot = document.getElementById('motionDot');
+const settingsPanel = document.getElementById('settingsPanel');
 
+// Settings controls
+const motionThresholdSlider = document.getElementById('motionThresholdSlider');
+const motionThresholdValue = document.getElementById('motionThresholdValue');
+const idlePauseSlider = document.getElementById('idlePauseSlider');
+const idlePauseValue = document.getElementById('idlePauseValue');
+const sleepTimerSlider = document.getElementById('sleepTimerSlider');
+const sleepTimerValue = document.getElementById('sleepTimerValue');
+const debugToggle = document.getElementById('debugToggle');
+const motionDotToggle = document.getElementById('motionDotToggle');
+const calibrateButton = document.getElementById('calibrateButton');
+const calibrationStatus = document.getElementById('calibrationStatus');
+const resetDefaultsButton = document.getElementById('resetDefaultsButton');
+
+// State
 let lastBrightness = null;
 let sleepTimer = null;
 let idlePauseTimer = null;
 let sleeping = false;
+let settingsOpen = false;
 
-const THRESHOLD = 5;
-const IDLE_PAUSE_TIME = 7000; // 7 seconds
-const SLEEP_DELAY = 10 * 60 * 1000; // 10 minutes
+// Defaults
+let THRESHOLD = 5;
+let IDLE_PAUSE_TIME = 7000; // 7s
+let SLEEP_DELAY = 10 * 60 * 1000; // 10 min
 
-// Hide debug after 5 seconds
+// Hide debug after 5 seconds (initially)
 setTimeout(() => { debug.style.opacity = "0"; }, 5000);
 
 // Start camera
@@ -92,40 +250,42 @@ const ctx = canvas.getContext('2d');
 
 player.load();
 player.play();
+resetIdlePause();
+resetSleepTimer();
+detectMotion();
 
-// Reset idle pause timer
+// -------- Idle pause --------
 function resetIdlePause() {
   clearTimeout(idlePauseTimer);
   idlePauseTimer = setTimeout(() => {
-    player.pause();
+    if (!settingsOpen && !sleeping) {
+      player.pause();
+    }
   }, IDLE_PAUSE_TIME);
 }
 
-// Sleep mode
+// -------- Sleep / wake --------
 function goToSleep() {
   sleeping = true;
   player.pause();
-  document.body.style.opacity = "0.1"; // dim screen
+  document.body.style.opacity = "0.1"; // dim
   motionDot.style.background = "grey";
 }
 
-// Wake mode
 function wakeUp() {
   if (!sleeping) return;
   sleeping = false;
-
-  document.body.style.opacity = "1"; // restore brightness
+  document.body.style.opacity = "1";
   player.play();
   resetIdlePause();
 }
 
-// Reset sleep timer
 function resetSleepTimer() {
   clearTimeout(sleepTimer);
   sleepTimer = setTimeout(goToSleep, SLEEP_DELAY);
 }
 
-// Motion detection loop
+// -------- Motion detection --------
 function detectMotion() {
   if (cam.videoWidth === 0) {
     requestAnimationFrame(detectMotion);
@@ -148,13 +308,24 @@ function detectMotion() {
     const diff = Math.abs(brightness - lastBrightness);
 
     if (diff > THRESHOLD) {
-      motionDot.style.background = "lime";
+      if (motionDotToggle.checked) motionDot.style.background = "lime";
       wakeUp();
-      player.play();
-      resetIdlePause();
+      if (!settingsOpen) {
+        player.play();
+        resetIdlePause();
+      }
       resetSleepTimer();
     } else {
-      motionDot.style.background = "grey";
+      if (motionDotToggle.checked) motionDot.style.background = "grey";
+    }
+
+    if (debugToggle.checked) {
+      debug.style.opacity = "1";
+      debug.textContent =
+        `brightness: ${brightness.toFixed(2)} diff: ${diff.toFixed(2)} ` +
+        `TH: ${THRESHOLD} idle: ${IDLE_PAUSE_TIME/1000}s sleep: ${SLEEP_DELAY/60000}m`;
+    } else {
+      debug.style.opacity = "0";
     }
   }
 
@@ -162,12 +333,130 @@ function detectMotion() {
   requestAnimationFrame(detectMotion);
 }
 
-resetIdlePause();
-resetSleepTimer();
-detectMotion();
+// -------- Hidden settings panel (long-press top-right) --------
+let longPressTimer = null;
 
-// Wake on touch
-window.addEventListener("touchstart", wakeUp);
+function isInTopRightCorner(x, y) {
+  const margin = 80; // px region
+  return (x > window.innerWidth - margin && y < margin);
+}
+
+function openSettings() {
+  if (settingsOpen) return;
+  settingsOpen = true;
+  settingsPanel.classList.add('open');
+  player.pause();
+}
+
+function closeSettings() {
+  if (!settingsOpen) return;
+  settingsOpen = false;
+  settingsPanel.classList.remove('open');
+  // Do not auto-play here; motion or you will resume it
+}
+
+// Touch events
+window.addEventListener('touchstart', (e) => {
+  const touch = e.touches[0];
+  if (!touch) return;
+  const x = touch.clientX;
+  const y = touch.clientY;
+
+  if (isInTopRightCorner(x, y) && !settingsOpen) {
+    longPressTimer = setTimeout(openSettings, 3000);
+  } else if (isInTopRightCorner(x, y) && settingsOpen) {
+    // Tap to close when open
+    closeSettings();
+  }
+});
+
+window.addEventListener('touchend', () => {
+  clearTimeout(longPressTimer);
+});
+
+// Mouse events (for testing on desktop)
+window.addEventListener('mousedown', (e) => {
+  const x = e.clientX;
+  const y = e.clientY;
+
+  if (isInTopRightCorner(x, y) && !settingsOpen) {
+    longPressTimer = setTimeout(openSettings, 3000);
+  } else if (isInTopRightCorner(x, y) && settingsOpen) {
+    closeSettings();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  clearTimeout(longPressTimer);
+});
+
+// -------- Settings panel logic --------
+function applySettingsFromUI() {
+  THRESHOLD = parseInt(motionThresholdSlider.value, 10);
+  motionThresholdValue.textContent = THRESHOLD;
+
+  const idleSeconds = parseInt(idlePauseSlider.value, 10);
+  IDLE_PAUSE_TIME = idleSeconds * 1000;
+  idlePauseValue.textContent = idleSeconds + "s";
+  resetIdlePause();
+
+  const sleepMinutes = parseInt(sleepTimerSlider.value, 10);
+  SLEEP_DELAY = sleepMinutes * 60 * 1000;
+  sleepTimerValue.textContent = sleepMinutes + " min";
+  resetSleepTimer();
+
+  // Debug visibility
+  if (debugToggle.checked) {
+    debug.style.opacity = "1";
+  } else {
+    debug.style.opacity = "0";
+  }
+
+  // Motion dot visibility
+  motionDot.style.display = motionDotToggle.checked ? "block" : "none";
+}
+
+// Sliders change
+motionThresholdSlider.addEventListener('input', applySettingsFromUI);
+idlePauseSlider.addEventListener('input', applySettingsFromUI);
+sleepTimerSlider.addEventListener('input', applySettingsFromUI);
+
+// Toggles
+debugToggle.addEventListener('change', applySettingsFromUI);
+motionDotToggle.addEventListener('change', applySettingsFromUI);
+
+// Calibration (simple: reset baseline + message)
+calibrateButton.addEventListener('click', () => {
+  calibrationStatus.textContent = "Calibrating… please hold still";
+  calibrationStatus.style.opacity = "1";
+
+  lastBrightness = null;
+  setTimeout(() => {
+    // In a more advanced version we could analyse noise here
+    calibrationStatus.textContent = "Calibration complete";
+  }, 2000);
+});
+
+// Reset to defaults
+resetDefaultsButton.addEventListener('click', () => {
+  motionThresholdSlider.value = 5;
+  idlePauseSlider.value = 7;
+  sleepTimerSlider.value = 10;
+  debugToggle.checked = true;
+  motionDotToggle.checked = true;
+  calibrationStatus.textContent = "Defaults restored (not calibrated)";
+  applySettingsFromUI();
+});
+
+// Initial apply
+applySettingsFromUI();
+
+// Wake on touch (for sleep mode)
+window.addEventListener("touchstart", () => {
+  if (sleeping) {
+    wakeUp();
+  }
+});
 </script>
 
 </body>
