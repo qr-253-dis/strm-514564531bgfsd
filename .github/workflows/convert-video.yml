@@ -31,10 +31,12 @@ jobs:
         run: |
           ffmpeg -y -i "${{ steps.findvideo.outputs.file }}" -vcodec libx264 -acodec aac yourvideo.mp4
 
-      - name: Commit converted file
+      - name: Commit converted file (force push)
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add yourvideo.mp4
           git commit -m "Auto-converted video to MP4" || echo "No changes to commit"
-          git push
+          git pull --rebase --strategy-option=theirs || true
+          git push --force
+
