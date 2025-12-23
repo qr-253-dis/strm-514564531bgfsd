@@ -1,1 +1,40 @@
+name: Convert uploaded video to MP4
+
+on:
+  push:
+    paths:
+      - "*.mov"
+      - "*.MOV"
+      - "*.mp4"
+      - "*.MP4"
+      - "yourvideo.*"
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Find the newest uploaded video
+        id: findvideo
+        run: |
+          FILE=$(ls -t *.mov *.MOV *.mp4 *.MP4 2>/dev/null | head -n 1)
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+
+      - name: Convert to MP4
+        run: |
+          ffmpeg -y -i "${{ steps.findvideo.outputs.file }}" -vcodec libx264 -acodec aac yourvideo.mp4
+
+      - name: Commit converted file
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add yourvideo.mp4
+          git commit -m "Auto-converted video to MP4" || echo "No changes to commit"
+          git push
 
