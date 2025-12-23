@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
+
 jobs:
   convert:
     runs-on: ubuntu-latest
