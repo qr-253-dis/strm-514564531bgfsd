@@ -282,7 +282,9 @@ function playNextVideo() {
 
 player.addEventListener("ended", () => {
   if (FULL_CYCLE_MODE) {
-    if (currentVideoIndex === playlist.length - 1) {
+    if (currentVideoIndex === playlist.length - 1) {	
+      // End of full cycle → reset playlist index 
+      currentVideoIndex = 0;
       player.pause();
       return;
     }
@@ -310,6 +312,13 @@ function wakeUp() {
   if (!sleeping) return;
   sleeping = false;
   document.body.style.opacity = "1";
+
+  // NEW: In full cycle mode, always restart from the first video in the playlist
+  if (FULL_CYCLE_MODE) {
+    player.src = playlist[currentVideoIndex];
+    player.load();
+  }
+
   player.play();
   resetIdlePause();
 }
