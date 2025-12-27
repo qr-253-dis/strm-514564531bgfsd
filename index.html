@@ -25,7 +25,6 @@
     object-fit: cover;
   }
 
-  /* Camera must be visible (1px) for iOS to update frames */
   #cam {
     position: fixed;
     bottom: 0;
@@ -36,7 +35,6 @@
     pointer-events: none;
   }
 
-  /* Debug overlay */
   #debug {
     position: fixed;
     top: 10px;
@@ -51,7 +49,6 @@
     transition: opacity 0.5s ease;
   }
 
-  /* Motion dot */
   #motionDot {
     position: fixed;
     top: 10px;
@@ -64,11 +61,10 @@
     z-index: 9999;
   }
 
-  /* Hidden settings panel (right slide-in) */
   #settingsPanel {
     position: fixed;
     top: 0;
-    right: -280px; /* hidden by default */
+    right: -280px;
     width: 260px;
     height: 100vh;
     background: rgba(0,0,0,0.8);
@@ -151,18 +147,15 @@
 
 <video id="cam" autoplay playsinline></video>
 
-<video id="player" playsinline preload="auto" muted loop>
-  <source src="yourvideo.mp4" type="video/mp4">
-</video>
+<!-- Updated: no loop, no source tag -->
+<video id="player" playsinline preload="auto" muted></video>
 
-<!-- Hidden settings panel -->
+<!-- Settings panel -->
 <div id="settingsPanel">
   <h2>Settings</h2>
 
   <h3>Motion sensitivity</h3>
-  <label>
-    Lower = more sensitive
-  </label>
+  <label>Lower = more sensitive</label>
   <input id="motionThresholdSlider" type="range" min="2" max="20" value="5">
   <div class="row">
     <span>Sensitive</span>
@@ -170,19 +163,15 @@
   </div>
 
   <h3>Idle pause duration</h3>
-  <label>
-    Seconds before video auto‑pauses
-  </label>
-  <input id="idlePauseSlider" type="range" min="3" max="15" value="7">
+  <label>Seconds before video auto‑pauses</label>
+  <input id="idlePauseSlider" type="range" min="3" max="60" value="7">
   <div class="row">
     <span>3s</span>
     <span id="idlePauseValue">7s</span>
   </div>
 
   <h3>Sleep timer</h3>
-  <label>
-    Minutes with no motion before dim
-  </label>
+  <label>Minutes with no motion before dim</label>
   <input id="sleepTimerSlider" type="range" min="1" max="30" value="10">
   <div class="row">
     <span>1 min</span>
@@ -192,11 +181,35 @@
   <h3>Display</h3>
   <div class="toggleRow">
     <span>Show debug overlay</span>
-    <input id="debugToggle" type="checkbox" checked>
+    <input id="debugToggle" type="checkbox">
   </div>
   <div class="toggleRow">
     <span>Show motion dot</span>
     <input id="motionDotToggle" type="checkbox" checked>
+  </div>
+
+  <h3>Video Selection</h3>
+  <div class="toggleRow">
+    <span>Play Video 1</span>
+    <input id="video1Toggle" type="checkbox" checked>
+  </div>
+  <div class="toggleRow">
+    <span>Play Video 2</span>
+    <input id="video2Toggle" type="checkbox">
+  </div>
+  <div class="toggleRow">
+    <span>Play Video 3</span>
+    <input id="video3Toggle" type="checkbox">
+  </div>
+
+  <h3>Pause Mode</h3>
+  <div class="toggleRow">
+    <span>Idle Pause Mode</span>
+    <input id="pauseModeIdle" type="radio" name="pauseMode" checked>
+  </div>
+  <div class="toggleRow">
+    <span>Full Cycle Pause Mode</span>
+    <input id="pauseModeFull" type="radio" name="pauseMode">
   </div>
 
   <h3>Calibration</h3>
@@ -205,6 +218,7 @@
 
   <button id="resetDefaultsButton">Reset to defaults</button>
 </div>
+
 <script>
 const cam = document.getElementById('cam');
 const player = document.getElementById('player');
@@ -212,7 +226,6 @@ const debug = document.getElementById('debug');
 const motionDot = document.getElementById('motionDot');
 const settingsPanel = document.getElementById('settingsPanel');
 
-// Settings controls
 const motionThresholdSlider = document.getElementById('motionThresholdSlider');
 const motionThresholdValue = document.getElementById('motionThresholdValue');
 const idlePauseSlider = document.getElementById('idlePauseSlider');
@@ -221,26 +234,34 @@ const sleepTimerSlider = document.getElementById('sleepTimerSlider');
 const sleepTimerValue = document.getElementById('sleepTimerValue');
 const debugToggle = document.getElementById('debugToggle');
 const motionDotToggle = document.getElementById('motionDotToggle');
+
+const video1Toggle = document.getElementById('video1Toggle');
+const video2Toggle = document.getElementById('video2Toggle');
+const video3Toggle = document.getElementById('video3Toggle');
+
+const pauseModeIdle = document.getElementById('pauseModeIdle');
+const pauseModeFull = document.getElementById('pauseModeFull');
+
 const calibrateButton = document.getElementById('calibrateButton');
 const calibrationStatus = document.getElementById('calibrationStatus');
 const resetDefaultsButton = document.getElementById('resetDefaultsButton');
 
-// State
 let lastBrightness = null;
 let sleepTimer = null;
 let idlePauseTimer = null;
 let sleeping = false;
 let settingsOpen = false;
 
-// Defaults
 let THRESHOLD = 5;
-let IDLE_PAUSE_TIME = 7000; // 7s
-let SLEEP_DELAY = 10 * 60 * 1000; // 10 min
+let IDLE_PAUSE_TIME = 7000;
+let SLEEP_DELAY = 10 * 60 * 1000;
 
-// Hide debug after 5 seconds (initially)
+let playlist = ["yourvideo.mp4"];
+let currentVideoIndex = 0;
+let FULL_CYCLE_MODE = false;
+
 setTimeout(() => { debug.style.opacity = "0"; }, 5000);
 
-// Start camera
 navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
   .then(stream => cam.srcObject = stream)
   .catch(err => alert("Camera access failed: " + err));
@@ -248,27 +269,35 @@ navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
 
-player.load();
-player.play();
-resetIdlePause();
-resetSleepTimer();
-detectMotion();
+function playNextVideo() {
+  currentVideoIndex = (currentVideoIndex + 1) % playlist.length;
+  player.src = playlist[currentVideoIndex];
+  player.play();
+}
 
-// -------- Idle pause --------
+player.addEventListener("ended", () => {
+  if (FULL_CYCLE_MODE) {
+    if (currentVideoIndex === playlist.length - 1) {
+      player.pause();
+      return;
+    }
+  }
+  playNextVideo();
+});
+
 function resetIdlePause() {
   clearTimeout(idlePauseTimer);
   idlePauseTimer = setTimeout(() => {
-    if (!settingsOpen && !sleeping) {
+    if (!settingsOpen && !sleeping && pauseModeIdle.checked) {
       player.pause();
     }
   }, IDLE_PAUSE_TIME);
 }
 
-// -------- Sleep / wake --------
 function goToSleep() {
   sleeping = true;
   player.pause();
-  document.body.style.opacity = "0.1"; // dim
+  document.body.style.opacity = "0.1";
   motionDot.style.background = "grey";
 }
 
@@ -285,7 +314,6 @@ function resetSleepTimer() {
   sleepTimer = setTimeout(goToSleep, SLEEP_DELAY);
 }
 
-// -------- Motion detection --------
 function detectMotion() {
   if (cam.videoWidth === 0) {
     requestAnimationFrame(detectMotion);
@@ -333,11 +361,8 @@ function detectMotion() {
   requestAnimationFrame(detectMotion);
 }
 
-// -------- Hidden settings panel (long-press top-right) --------
-let longPressTimer = null;
-
 function isInTopRightCorner(x, y) {
-  const margin = 80; // px region
+  const margin = 80;
   return (x > window.innerWidth - margin && y < margin);
 }
 
@@ -352,10 +377,10 @@ function closeSettings() {
   if (!settingsOpen) return;
   settingsOpen = false;
   settingsPanel.classList.remove('open');
-  // Do not auto-play here; motion or you will resume it
 }
 
-// Touch events
+let longPressTimer = null;
+
 window.addEventListener('touchstart', (e) => {
   const touch = e.touches[0];
   if (!touch) return;
@@ -365,7 +390,6 @@ window.addEventListener('touchstart', (e) => {
   if (isInTopRightCorner(x, y) && !settingsOpen) {
     longPressTimer = setTimeout(openSettings, 3000);
   } else if (isInTopRightCorner(x, y) && settingsOpen) {
-    // Tap to close when open
     closeSettings();
   }
 });
@@ -374,7 +398,6 @@ window.addEventListener('touchend', () => {
   clearTimeout(longPressTimer);
 });
 
-// Mouse events (for testing on desktop)
 window.addEventListener('mousedown', (e) => {
   const x = e.clientX;
   const y = e.clientY;
@@ -390,7 +413,6 @@ window.addEventListener('mouseup', () => {
   clearTimeout(longPressTimer);
 });
 
-// -------- Settings panel logic --------
 function applySettingsFromUI() {
   THRESHOLD = parseInt(motionThresholdSlider.value, 10);
   motionThresholdValue.textContent = THRESHOLD;
@@ -405,53 +427,67 @@ function applySettingsFromUI() {
   sleepTimerValue.textContent = sleepMinutes + " min";
   resetSleepTimer();
 
-  // Debug visibility
-  if (debugToggle.checked) {
-    debug.style.opacity = "1";
-  } else {
-    debug.style.opacity = "0";
+  debug.style.opacity = debugToggle.checked ? "1" : "0";
+  motionDot.style.display = motionDotToggle.checked ? "block" : "none";
+
+  playlist = [];
+  if (video1Toggle.checked) playlist.push("yourvideo.mp4");
+  if (video2Toggle.checked) playlist.push("yourvideo2.mp4");
+  if (video3Toggle.checked) playlist.push("yourvideo3.mp4");
+
+  if (playlist.length === 0) {
+    playlist.push("yourvideo.mp4");
+    video1Toggle.checked = true;
   }
 
-  // Motion dot visibility
-  motionDot.style.display = motionDotToggle.checked ? "block" : "none";
+  FULL_CYCLE_MODE = pauseModeFull.checked;
 }
 
-// Sliders change
 motionThresholdSlider.addEventListener('input', applySettingsFromUI);
 idlePauseSlider.addEventListener('input', applySettingsFromUI);
 sleepTimerSlider.addEventListener('input', applySettingsFromUI);
-
-// Toggles
 debugToggle.addEventListener('change', applySettingsFromUI);
 motionDotToggle.addEventListener('change', applySettingsFromUI);
+video1Toggle.addEventListener('change', applySettingsFromUI);
+video2Toggle.addEventListener('change', applySettingsFromUI);
+video3Toggle.addEventListener('change', applySettingsFromUI);
+pauseModeIdle.addEventListener('change', applySettingsFromUI);
+pauseModeFull.addEventListener('change', applySettingsFromUI);
 
-// Calibration (simple: reset baseline + message)
 calibrateButton.addEventListener('click', () => {
   calibrationStatus.textContent = "Calibrating… please hold still";
   calibrationStatus.style.opacity = "1";
 
   lastBrightness = null;
   setTimeout(() => {
-    // In a more advanced version we could analyse noise here
     calibrationStatus.textContent = "Calibration complete";
   }, 2000);
 });
 
-// Reset to defaults
 resetDefaultsButton.addEventListener('click', () => {
   motionThresholdSlider.value = 5;
   idlePauseSlider.value = 7;
   sleepTimerSlider.value = 10;
-  debugToggle.checked = true;
+  debugToggle.checked = false;
   motionDotToggle.checked = true;
+  video1Toggle.checked = true;
+  video2Toggle.checked = false;
+  video3Toggle.checked = false;
+  pauseModeIdle.checked = true;
+  pauseModeFull.checked = false;
   calibrationStatus.textContent = "Defaults restored (not calibrated)";
   applySettingsFromUI();
 });
 
-// Initial apply
 applySettingsFromUI();
 
-// Wake on touch (for sleep mode)
+player.src = playlist[0];
+player.load();
+player.play();
+resetIdlePause();
+resetSleepTimer();
+detectMotion();
+
 window.addEventListener("touchstart", () => {
   if (sleeping) {
     wakeUp();
