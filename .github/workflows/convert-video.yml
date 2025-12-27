@@ -21,23 +21,39 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Find newest uploaded video (excluding yourvideo.mp4)
+      - name: Find newest uploaded video (excluding yourvideo*.mp4)
         id: findvideo
         run: |
           FILE=$(find . -type f \
             \( -iname "*.mov" -o -iname "*.mp4" -o -iname "*.m4v" \) \
             ! -iname "yourvideo.mp4" \
+            ! -iname "yourvideo2.mp4" \
+            ! -iname "yourvideo3.mp4" \
             | sort -r | head -n 1)
+
           echo "file=$FILE" >> $GITHUB_OUTPUT
           echo "Found file: $FILE"
 
-      - name: Convert HDR video to SDR MP4
+      - name: Determine next slot
+        id: slot
         run: |
+          SLOT=$(cat slot.txt)
+          echo "slot=$SLOT" >> $GITHUB_OUTPUT
+          echo "Next slot is: $SLOT"
+
+      - name: Convert HDR video to SDR MP4 into correct slot
+        run: |
+          SLOT=${{ steps.slot.outputs.slot }}
+
+          if [ "$SLOT" = "1" ]; then OUT="yourvideo.mp4"; fi
+          if [ "$SLOT" = "2" ]; then OUT="yourvideo2.mp4"; fi
+          if [ "$SLOT" = "3" ]; then OUT="yourvideo3.mp4"; fi
+
           ffmpeg -y -i "${{ steps.findvideo.outputs.file }}" \
             -vf "zscale=transfer=bt2020-10:matrix=bt2020nc:primaries=bt2020,tonemap=hable,zscale=transfer=bt709:matrix=bt709:primaries=bt709,format=yuv420p" \
             -c:v libx264 -crf 18 -preset medium \
             -c:a aac -b:a 128k \
-            yourvideo.mp4
+            "$OUT"
 
       - name: Delete original uploaded video
         run: |
@@ -45,11 +61,20 @@ jobs:
           git add -A
           git commit -m "Removed original uploaded video" || true
 
+      - name: Update slot.txt for next upload
+        run: |
+          SLOT=${{ steps.slot.outputs.slot }}
+          NEXT=$((SLOT + 1))
+          if [ "$NEXT" -gt 3 ]; then NEXT=1; fi
+          echo "$NEXT" > slot.txt
+          git add slot.txt
+          git commit -m "Updated slot pointer to $NEXT" || true
+
       - name: Commit converted file (force push)
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add yourvideo.mp4
+          git add yourvideo*.mp4
           git commit -m "Auto-converted HDR video to SDR MP4" || true
           git pull --rebase --strategy-option=theirs || true
           git push --force
