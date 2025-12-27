@@ -78,6 +78,10 @@
     flex-direction: column;
     gap: 12px;
     transition: right 0.3s ease;
+
+    /* NEW: allow scrolling in landscape */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   #settingsPanel.open {
