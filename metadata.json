@@ -1,0 +1,28 @@
+{
+  "videos": [
+    {
+      "slot": 1,
+      "file": "yourvideo1.mp4",
+      "active": true,
+      "timestamp": null,
+      "duration": null
+    },
+    {
+      "slot": 2,
+      "file": "yourvideo2.mp4",
+      "active": false,
+      "timestamp": null,
+      "duration": null
+    },
+    {
+      "slot": 3,
+      "file": "yourvideo3.mp4",
+      "active": false,
+      "timestamp": null,
+      "duration": null
+    }
+  ],
+  "playbackMode": "idlePause",
+  "idlePauseDuration": 10,
+  "showDebug": false
+}
