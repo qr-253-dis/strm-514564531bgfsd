@@ -486,6 +486,7 @@ resetDefaultsButton.addEventListener('click', () => {
 
 applySettingsFromUI();
 
+player.loop = false; // IMPORTANT FIX for playlist advancing
 player.src = playlist[0];
 player.load();
 player.play();
