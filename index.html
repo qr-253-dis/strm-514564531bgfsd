@@ -10,6 +10,25 @@
 
 <title>Motion Video Frame</title>
 
+<!-- Add the metadata loader RIGHT HERE -->
+<script>
+async function loadMetadata() {
+  try {
+    const response = await fetch('metadata.json?cacheBust=' + Date.now());
+    if (!response.ok) {
+      console.error("Failed to load metadata.json");
+      return null;
+    }
+    const metadata = await response.json();
+    return metadata;
+  } catch (err) {
+    console.error("Error loading metadata.json:", err);
+    return null;
+  }
+}
+</script>
+<!-- End of metadata loader -->
+
 <style>
   body {
     margin: 0;
