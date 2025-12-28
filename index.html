@@ -399,6 +399,15 @@ function closeSettings() {
   if (!settingsOpen) return;
   settingsOpen = false;
   settingsPanel.classList.remove('open');
+
+  // IMPORTANT: Reapply settings when closing panel
+  applySettingsFromUI();
+
+  // Restart playlist from the first selected video
+  currentVideoIndex = 0;
+  player.src = playlist[currentVideoIndex];
+  player.load();
+  player.play();
 }
 
 let longPressTimer = null;
