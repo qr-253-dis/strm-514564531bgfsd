@@ -247,6 +247,14 @@ const video3Toggle = document.getElementById('video3Toggle');
 const pauseModeIdle = document.getElementById('pauseModeIdle');
 const pauseModeFull = document.getElementById('pauseModeFull');
 
+// Rebuild playlist whenever video selection or pause mode changes
+video1Toggle.addEventListener("change", applySettingsFromUI);
+video2Toggle.addEventListener("change", applySettingsFromUI);
+video3Toggle.addEventListener("change", applySettingsFromUI);
+
+pauseModeIdle.addEventListener("change", applySettingsFromUI);
+pauseModeFull.addEventListener("change", applySettingsFromUI);
+
 const calibrateButton = document.getElementById('calibrateButton');
 const calibrationStatus = document.getElementById('calibrationStatus');
 const resetDefaultsButton = document.getElementById('resetDefaultsButton');
