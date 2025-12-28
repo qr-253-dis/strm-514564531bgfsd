@@ -294,6 +294,10 @@ player.addEventListener("ended", () => {
       // End of full cycle → reset playlist index 
       currentVideoIndex = 0;
       player.pause();
+
+      // IMPORTANT: Treat end-of-cycle pause as "sleep"
+      sleeping = true;
+
       return;
     }
   }
