@@ -66,7 +66,6 @@
     top: 0;
     right: -280px;
     width: 260px;
-    /* FIX: iOS Home Screen scroll support */
     height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     background: rgba(0,0,0,0.8);
     color: #fff;
@@ -79,8 +78,6 @@
     flex-direction: column;
     gap: 12px;
     transition: right 0.3s ease;
-
-    /* FIX: scrolling in PWA mode */
     overflow-y: scroll;
     -webkit-overflow-scrolling: touch;
   }
@@ -152,10 +149,8 @@
 
 <video id="cam" autoplay playsinline></video>
 
-<!-- Updated: no loop, no source tag -->
 <video id="player" playsinline preload="auto" muted></video>
 
-<!-- Settings panel -->
 <div id="settingsPanel">
   <h2>Settings</h2>
 
@@ -247,7 +242,6 @@ const video3Toggle = document.getElementById('video3Toggle');
 const pauseModeIdle = document.getElementById('pauseModeIdle');
 const pauseModeFull = document.getElementById('pauseModeFull');
 
-// Rebuild playlist whenever video selection or pause mode changes
 video1Toggle.addEventListener("change", applySettingsFromUI);
 video2Toggle.addEventListener("change", applySettingsFromUI);
 video3Toggle.addEventListener("change", applySettingsFromUI);
@@ -290,14 +284,10 @@ function playNextVideo() {
 
 player.addEventListener("ended", () => {
   if (FULL_CYCLE_MODE) {
-    if (currentVideoIndex === playlist.length - 1) {	
-      // End of full cycle → reset playlist index 
+    if (currentVideoIndex === playlist.length - 1) {    
       currentVideoIndex = 0;
       player.pause();
-
-      // IMPORTANT: Treat end-of-cycle pause as "sleep"
       sleeping = true;
-
       return;
     }
   }
@@ -325,7 +315,6 @@ function wakeUp() {
   sleeping = false;
   document.body.style.opacity = "1";
 
-  // NEW: In full cycle mode, always restart from the first video in the playlist
   if (FULL_CYCLE_MODE) {
     player.src = playlist[currentVideoIndex];
     player.load();
@@ -404,10 +393,8 @@ function closeSettings() {
   settingsOpen = false;
   settingsPanel.classList.remove('open');
 
-  // IMPORTANT: Reapply settings when closing panel
   applySettingsFromUI();
 
-  // Restart playlist from the first selected video
   currentVideoIndex = 0;
   player.src = playlist[currentVideoIndex];
   player.load();
@@ -516,7 +503,7 @@ resetDefaultsButton.addEventListener('click', () => {
 
 applySettingsFromUI();
 
-player.loop = false; // IMPORTANT FIX for playlist advancing
+player.loop = false;
 player.src = playlist[0];
 player.load();
 player.play();
@@ -535,6 +522,52 @@ window.addEventListener("touchstart", () => {
   setInterval(() => {
     console.log("keepalive");
   }, 60000);
+</script>
+
+<!-- ⭐ NEW: Video-only auto-refresh system -->
+<script>
+async function checkForUpdatedVideo() {
+  try {
+    const currentFile = playlist[currentVideoIndex];
+
+    const response = await fetch(currentFile, {
+      method: "HEAD",
+      cache: "no-store"
+    });
+
+    const newTimestamp = response.headers.get("Last-Modified");
+
+    if (!window._lastModified) {
+      window._lastModified = {};
+    }
+
+    if (!window._lastModified[currentFile]) {
+      window._lastModified[currentFile] = newTimestamp;
+      return;
+    }
+
+    if (window._lastModified[currentFile] !== newTimestamp) {
+      console.log("New version detected for", currentFile);
+
+      window._lastModified[currentFile] = newTimestamp;
+
+      const wasPaused = player.paused;
+      const currentTime = player.currentTime;
+
+      player.src = currentFile + "?t=" + Date.now();
+      player.load();
+
+      if (!wasPaused) {
+        player.currentTime = currentTime;
+        player.play();
+      }
+    }
+  } catch (err) {
+    console.error("Video update check failed:", err);
+  }
+}
+
+setInterval(checkForUpdatedVideo, 30000);
 </script>
 
 </body>
