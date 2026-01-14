@@ -21,19 +21,24 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Find newest uploaded video (excluding yourvideo*.mp4)
-        id: findvideo
+      # 1. Find newest URL file uploaded by Shortcuts
+      - name: Find newest uploaded URL file
+        id: findurl
         run: |
-          FILE=$(find . -type f \
-            \( -iname "*.mov" -o -iname "*.mp4" -o -iname "*.m4v" \) \
-            ! -iname "yourvideo.mp4" \
-            ! -iname "yourvideo2.mp4" \
-            ! -iname "yourvideo3.mp4" \
-            | sort -r | head -n 1)
-
+          FILE=$(find incoming -type f -iname "*.txt" | sort -r | head -n 1)
           echo "file=$FILE" >> $GITHUB_OUTPUT
-          echo "Found file: $FILE"
+          echo "Found URL file: $FILE"
 
+      # 2. Download the actual video from Cloudinary
+      - name: Download video from Cloudinary
+        id: download
+        run: |
+          URL=$(cat "${{ steps.findurl.outputs.file }}")
+          echo "Downloading video from: $URL"
+          curl -L "$URL" -o incoming/uploaded.mov
+          echo "downloaded=incoming/uploaded.mov" >> $GITHUB_OUTPUT
+
+      # 3. Determine which slot to write to
       - name: Determine next slot
         id: slot
         run: |
@@ -41,6 +46,7 @@ jobs:
           echo "slot=$SLOT" >> $GITHUB_OUTPUT
           echo "Next slot is: $SLOT"
 
+      # 4. Convert HDR → SDR MP4 using FFmpeg
       - name: Convert HDR video to SDR MP4 into correct slot
         run: |
           SLOT=${{ steps.slot.outputs.slot }}
@@ -49,18 +55,21 @@ jobs:
           if [ "$SLOT" = "2" ]; then OUT="yourvideo2.mp4"; fi
           if [ "$SLOT" = "3" ]; then OUT="yourvideo3.mp4"; fi
 
-          ffmpeg -y -i "${{ steps.findvideo.outputs.file }}" \
+          ffmpeg -y -i "${{ steps.download.outputs.downloaded }}" \
             -vf "zscale=transfer=bt2020-10:matrix=bt2020nc:primaries=bt2020,tonemap=hable,zscale=transfer=bt709:matrix=bt709:primaries=bt709,format=yuv420p" \
             -c:v libx264 -crf 18 -preset medium \
             -c:a aac -b:a 128k \
             "$OUT"
 
-      - name: Delete original uploaded video
+      # 5. Delete the original downloaded video + the URL file
+      - name: Delete original uploaded video and URL file
         run: |
-          rm -f "${{ steps.findvideo.outputs.file }}"
+          rm -f "${{ steps.download.outputs.downloaded }}"
+          rm -f "${{ steps.findurl.outputs.file }}"
           git add -A
-          git commit -m "Removed original uploaded video" || true
+          git commit -m "Removed original uploaded video and URL file" || true
 
+      # 6. Update slot pointer
       - name: Update slot.txt for next upload
         run: |
           SLOT=${{ steps.slot.outputs.slot }}
@@ -70,6 +79,7 @@ jobs:
           git add slot.txt
           git commit -m "Updated slot pointer to $NEXT" || true
 
+      # 7. Commit converted MP4
       - name: Commit converted file (force push)
         run: |
           git config user.name "GitHub Actions"
