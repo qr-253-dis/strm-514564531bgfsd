@@ -1,0 +1,42 @@
+name: Cloudinary Cleanup
+
+on:
+  schedule:
+    - cron: "0 7 * * 6"   # Runs every Saturday at 07:00 UTC (18:00 Melbourne time)
+  workflow_dispatch:        # Allows manual run
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete Cloudinary videos older than X days
+        env:
+          CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          DAYS: 3   # Keep only 3 days of videos
+        run: |
+          echo "Fetching Cloudinary video list..."
+
+          # Get all videos (max 500)
+          curl -u "$API_KEY:$API_SECRET" \
+            "https://api.cloudinary.com/v1_1/$CLOUD_NAME/resources/video?max_results=500" \
+            -o videos.json
+
+          NOW=$(date +%s)
+
+          for PUBLIC_ID in $(jq -r '.resources[].public_id' videos.json); do
+            CREATED=$(jq -r ".resources[] | select(.public_id==\"$PUBLIC_ID\") | .created_at" videos.json)
+            CREATED_TS=$(date -d "$CREATED" +%s)
+            AGE_DAYS=$(( (NOW - CREATED_TS) / 86400 ))
+
+            if [ "$AGE_DAYS" -gt "$DAYS" ]; then
+              echo "Deleting $PUBLIC_ID (age: $AGE_DAYS days)"
+              curl -u "$API_KEY:$API_SECRET" \
+                -X DELETE \
+                "https://api.cloudinary.com/v1_1/$CLOUD_NAME/resources/video/upload?public_ids[]=$PUBLIC_ID"
+            fi
+          done
+
+          echo "Cleanup complete."
